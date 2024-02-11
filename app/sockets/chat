@@ -1,0 +1,390 @@
+import {
+    Animated,
+    Dimensions,
+    FlatList,
+    Image,
+    Keyboard,
+    StyleSheet,
+    Text,
+    View,
+  } from 'react-native';
+  import React, {
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+  } from 'react';
+  import {
+    black,
+    bluedark,
+    bluelight,
+    buttondark,
+    buttonlight,
+    inputdark,
+    inputlight,
+    modaldark,
+    modallight,
+    textblack,
+    textlight,
+    white,
+  } from '../../../utils/Colors';
+  import {TextInput, TouchableOpacity} from 'react-native-gesture-handler';
+  import {useDispatch, useSelector} from 'react-redux';
+  import Sound from 'react-native-sound';
+  import Entypo from 'react-native-vector-icons/Entypo';
+  import moment from 'moment';
+  import Ionicons from 'react-native-vector-icons/Ionicons';
+  import {useNavigation} from '@react-navigation/native';
+  import {sendchats} from '../../../redux/ChatData';
+  import {socketemitfunc} from '../../../utils/Sockets';
+  import {
+    sendconvmessage,
+    sendreply,
+    setattachopen,
+  } from '../../../redux/Conversationdata';
+  
+  const KKeyboard = ({convId, myname, myid, id, mypic, dp, name, uname}) => {
+    const nav = useNavigation();
+    const [message, setMessage] = useState('');
+    const reply = useSelector(state => state.conversationdata.reply);
+    const replyId = useSelector(state => state.conversationdata.replyId);
+    const data = useSelector(state => state.conversationdata.data);
+    const [mode, setMode] = useState('camera');
+  
+    const {pic, fullname, username, isverified, theme} = useSelector(
+      state => state.basicdata,
+    );
+    const dispatch = useDispatch();
+  
+    const sendm = useCallback(async () => {
+      const rid = Math.floor(Math.random() * 90000000) + 10000000;
+      const timer = moment(new Date()).format('HH:mm').toString();
+      const timestamp = ${new Date()};
+  
+      if (!message.trim()) {
+        console.log('Type Something');
+      } else {
+        setMessage('');
+        let mess = {
+          sender_fullname: myname,
+          sender_id: myid,
+          text: message,
+          createdAt: timestamp,
+          timestamp: timer,
+          mesId: rid,
+          typ: reply ? 'reply' : 'message',
+          convId: convId,
+          reciever: id,
+          reciever_pic: dp,
+          isread: false,
+          sequence: data?.length + 1,
+          sender: {_id: myid},
+          reply: reply,
+          replyId: replyId,
+          readby: [],
+        };
+        let ext = {
+          convid: convId,
+          fullname: fullname,
+          id: id,
+          isverified: isverified,
+          msgs: [
+            {
+              conversationId: convId,
+              createdAt: timestamp,
+              isread: false,
+              mesId: rid,
+              sender: myid,
+              sequence: data?.length + 1,
+              text: message,
+              timestamp: timer,
+              typ: reply ? 'reply' : 'message',
+              reply: reply,
+              replyId: replyId,
+            },
+          ],
+          pic: pic,
+          username: username,
+        };
+  
+        dispatch(sendconvmessage(mess));
+        //for sending message to outer chats
+        dispatch(sendchats({data: ext}));
+        socketemitfunc({
+          event: 'singleChatMessage',
+          data: {roomId: convId, userId: id, data: mess, ext: ext},
+        });
+        socketemitfunc({
+          event: 'typing',
+          data: {userId: myid, roomId: convId, status: false},
+        });
+        dispatch(sendreply(''));
+        const sendsound = new Sound('send.wav', Sound.MAIN_BUNDLE, error => {
+          if (error) {
+            console.log('failed to load the sound', error);
+            return;
+          }
+          sendsound.play(success => {
+            if (success) {
+              console.log('successfully finished playing');
+            } else {
+              console.log('playback failed due to audio decoding errors');
+            }
+          });
+        });
+      }
+    }, [
+      convId,
+      id,
+      message,
+      myid,
+      reply,
+      fullname,
+      username,
+      isverified,
+      dp,
+      pic,
+      replyId,
+      dispatch,
+      myname,
+      data,
+    ]);
+  
+    useEffect(() => {
+      if (!message?.trim()) {
+        setTimeout(() => {
+          setMode('camera');
+        }, 500);
+      }
+    }, [message]);
+  
+    return (
+      <View
+        style={{
+          width: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme ? white : black,
+          maxHeight: 220,
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          overflow: 'hidden',
+        }}>
+        {/reply/}
+        {reply ? (
+          <View
+            style={{
+              maxHeight: 130,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              backgroundColor: theme ? buttonlight : buttondark,
+              borderRadius: 20,
+              padding: 10,
+              margin: 5,
+              flexDirection: 'row',
+              width: '100%',
+            }}>
+            <View
+              style={{
+                height: '100%',
+                width: 5,
+                backgroundColor: theme ? bluelight : bluedark,
+                borderTopLeftRadius: 12,
+                borderBottomLeftRadius: 12,
+              }}
+            />
+            <View
+              style={{
+                maxHeight: 120,
+                justifyContent: 'flex-start',
+                alignItems: 'flex-start',
+                flexDirection: 'row',
+                width: '93%',
+                paddingHorizontal: 10,
+              }}>
+              <View>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '400',
+                    color: theme ? textlight : textblack,
+                  }}
+                  numberOfLines={4}>
+                  {reply}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                dispatch(sendreply(''));
+              }}
+              style={{height: 30, width: 30}}>
+              <Entypo
+                name="cross"
+                size={20}
+                color={theme ? textlight : textblack}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+  
+        {/field/}
+        <View
+          style={{
+            height: 60,
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme ? white : black,
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderColor: theme ? '#f7f7f7' : '#141414',
+            marginTop: 5,
+            padding: 10,
+          }}>
+          {/input/}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              width: '80%',
+              backgroundColor: theme ? inputlight : inputdark,
+              height: 40,
+              borderRadius: 15,
+              paddingHorizontal: 10,
+              marginHorizontal: 5,
+  
+              borderWidth: 1,
+              borderColor: theme ? '#f7f7f7' : '#141414',
+            }}>
+            <TouchableOpacity
+              onPress={() => {
+                dispatch(setattachopen(true));
+                Keyboard.dismiss();
+              }}
+              style={{
+                height: 23,
+                width: 23,
+  
+                borderRadius: 15,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+              <Entypo name="attachment" size={16} color={theme ? black : white} />
+            </TouchableOpacity>
+            <TextInput
+              value={message}
+              onChangeText={t => {
+                socketemitfunc({
+                  event: 'typing',
+                  data: {userId: myid, id, roomId: convId, status: true},
+                });
+                setMessage(t);
+                if (t?.length > 0) {
+                  setMode('send');
+                } else {
+                  setMode('camera');
+                }
+              }}
+              // onFocus={() => {
+              //   if (flatListRef?.current) {
+              //     flatListRef?.current?.scrollToEnd({
+              //       animated: true,
+              //     });
+              //   }
+              // }}
+              onBlur={b => {
+                if (b) {
+                  socketemitfunc({
+                    event: 'typing',
+                    data: {userId: myid, id, roomId: convId, status: false},
+                  });
+                }
+              }}
+              placeholder="Enter your Message..."
+              style={{
+                height: 38,
+                backgroundColor: theme ? inputlight : inputdark,
+                width: '90%',
+                borderRadius: 15,
+                color: theme ? black : white,
+                marginHorizontal: 10,
+                zIndex: 10,
+                fontSize: 13,
+                fontWeight: '400',
+              }}
+            />
+          </View>
+  
+          {/Send/}
+          <TouchableOpacity
+            onPress={() => {
+              mode === 'send'
+                ? sendm()
+                : nav.navigate('CameraChat', {
+                    id,
+                    convId,
+                    name,
+                    myid,
+                    myname,
+                    sequence: data?.length + 1,
+                    isverified,
+                    dp,
+                    mypic,
+  
+                    uname,
+                  });
+            }}
+            activeOpacity={0.7}
+            style={{
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: 35,
+              width: 35,
+              backgroundColor: theme ? bluelight : bluedark,
+              borderRadius: 16,
+              zIndex: 10,
+              marginHorizontal: 10,
+            }}>
+            {mode === 'send' ? (
+              <Image
+                style={{height: 17, width: 17}}
+                source={require('../../../assets/Images/senddark.png')}
+              />
+            ) : (
+              <Ionicons name="camera-outline" size={20} color={white} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+  
+  const Memokeyboard = memo(KKeyboard);
+  
+  export default Memokeyboard;
+  
+  const styles = StyleSheet.create({});
+
+  <MemoConvMsgs
+          press={press}
+          scrolltoIndex={scrolltoIndex}
+          name={name}
+          myname={myname}
+          key={index}
+          item={item}
+          i={index}
+          dp={dp}
+          mesId={item?.mesId}
+          id={id}
+          myid={myid}
+          mypic={mypic}
+          mine={item?.sender?._id === myid}
+          read={item?.readby?.includes(id)}
+        />
